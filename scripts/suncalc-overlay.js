@@ -366,7 +366,6 @@ $.extend(SuncalcOverlay.prototype, {
            var posPoint = this._getSunPosPoint(date);
            var topoAngle = this.elevationManager.getTopographicalAngle(posPoint.azimuth, this._height);
            var isSunny = posPoint.altitude > topoAngle;
-           console.log(date + "height = " + this._height + "m, angle=" + (180 + posPoint.azimuth * 180 / Math.PI) + " deg, topoAngle=" + (topoAngle*180/Math.PI) + ", altitude=" + (posPoint.altitude*180/Math.PI) + (isSunny? ", sun":", shade"));
            var sunOrShade = this._paper.path().attr(this._genPathAttrs(isSunny ? this.SUNNY_ATTRS : this.SHADY_ATTRS));
            // When the sun is below the spherical horizon, there is no point in plotting the shady rays: it's just
            // visul polution. However, when it's sunny after sunset or before sunrise, that's valuable information
