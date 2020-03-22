@@ -345,9 +345,6 @@ $(document).ready(function() {
 				marker.setPosition(location);
 			}
 			
-			$('#forecast-link').attr('href', 'http://www.wolframalpha.com/input/?i=' + 
-					formatCoord(location.lat()) + 'N+' + formatCoord(location.lng()) + 'E+conditions+next+week');
-
 			var di = SunCalc.getDayInfo(date, location.lat(), location.lng(), moreDetailed);
 			
 			var transitAltitude = SunCalc.getSunPosition(di.transit, location.lat(), location.lng()).altitude;
