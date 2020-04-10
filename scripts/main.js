@@ -32,7 +32,7 @@ $(document).ready(function() {
 			width: 350, 
 			autoOpen: !welcomeHidden,
 			close: function() {
-				createCookie('suncalc_welcome_hidden', 'true', 14);
+				createCookie('suncalc_welcome_hidden', 'true');
 			}
 		});
 		$('#about-link').click(function() {
@@ -419,11 +419,11 @@ $(document).ready(function() {
 	}
 			
 	function saveLocationInCookies() {
-		createCookie("suncalc_last_location", location.lat() + ':' + location.lng() + ':' + map.getZoom(), 14);
+		createCookie("suncalc_last_location", location.lat() + ':' + location.lng() + ':' + map.getZoom());
 	}
 	
 	function saveLocationNameInCookies() {
-		createCookie("suncalc_last_location_name", $('#location').val(), 14);
+		createCookie("suncalc_last_location_name", $('#location').val());
 	}
 	
 	function getLastViewFromCookies() {
@@ -461,14 +461,8 @@ $(document).ready(function() {
 	}
 	
 	//taken from http://quirksmode.org/js/cookies.html
-	function createCookie(name, value, days) {
-		if (days) {
-			var date = new Date();
-			date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-			var expires = "; expires=" + date.toGMTString();
-		}
-		else var expires = "";
-		document.cookie = name + "=" + value + expires + "; path=/";
+	function createCookie(name, value) {
+		document.cookie = name + "=" + value + "; path=/";
 	}
 
 	function readCookie(name) {
