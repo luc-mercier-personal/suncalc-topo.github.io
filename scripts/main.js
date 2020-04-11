@@ -119,11 +119,19 @@ $(document).ready(function() {
 		
 		$(document).mousedown(documentMousedownHandler);
 		
-		var scaleStr = '<table id="time-scale"><tr>';
-		for (var i = 0; i < 24; i++) {
-			scaleStr += '<td>' + i + '<span>:00</span></td>';
+		var scaleStr = '<table id="time-scale"><tr id="time-labels">';
+		// Top row: labels
+		var LABEL_EVERY_N_HOURS = 3;
+		for (var i = 0; i < 24 / LABEL_EVERY_N_HOURS; i++) {
+			scaleStr += '<td colspan="' + LABEL_EVERY_N_HOURS + '">' + i * LABEL_EVERY_N_HOURS + '<span>:00</span></td>';
 		}
-		scaleStr += '</table></tr>';
+		// Bottom row: ticks
+		scaleStr += '</tr><tr id="time-ticks">';
+		for (var i = 0; i < 24; i++) {
+			var attr = (i % LABEL_EVERY_N_HOURS == 0) ? ' class="thick"': '';
+			scaleStr += '<td' + attr + '></td>';
+		}
+		scaleStr += '</tr></table>';
 		$('#time-scale-container').html(scaleStr);
 		
 		$('#more-detailed-link').click(function() {
