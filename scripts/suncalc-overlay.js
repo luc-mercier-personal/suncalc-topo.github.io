@@ -11,93 +11,90 @@ SuncalcOverlay.prototype = new google.maps.OverlayView();
 // - interpolate those angles
 function ElevationRayManager(overlay, position) {
     this._overlay = overlay;
-    this._elevationService = null;
+    this._elevationService = new google.maps.ElevationService();
     this._position = position;
     this.NUM_RAYS = 24; // In how many directions we compute the elevations
     // How far do we look for obstruction ? 5 km.
     this.SHADE_COMPUTATION_DISTANCE = 5000;
     this.SHADE_COMPUTATION_NUM_SAMPLES = 50; // 1 point every 100 m
     // _elevations[i] = the elevations in heading 360*i/NUM_RAYS degrees (from north, clockwise)
-    this._elevations = Array.apply(null, new Array(this.NUM_RAYS)).map(function() {return [];});
+    this._elevations = Array(this.NUM_RAYS).fill().map(() => []);
     this._centerElevation = null; // Elevation at _position
-    this._numPendingResults = this.NUM_RAYS;  // When this gets to zero, the init is done.
     
+    this._pendingCallbacks = Array(this.NUM_RAYS).fill()
+    .map((_,i)=>i).map(this._createSendRPCCallback, this) 
+
     // We differ the initialization by 100 ms. This is because when dragging, the location changes a lot,
-    // and google's elevation service refuse to reply when we exceed the quota.
-    setTimeout(this._createInitCallback(), 100);
+    // which can cause many unnecessary RPCs to the elevation service, which are costly.
+    setTimeout(this._finishInit.bind(this), 100);
 };
 
-// Is this object still the current manager?
+//Is this object still the current manager?
 ElevationRayManager.prototype._isUpToDate = function() {
-    return this._overlay.elevationManager == this;
+	return this._overlay.elevationManager == this;
 };
 
-// Is this manager ready to be used?
+//Is this manager ready to be used?
 ElevationRayManager.prototype.isInitialized = function() {
-    return this._numPendingResults == 0;
+	return this._pendingCallbacks.length == 0;
 };
 
-
-ElevationRayManager.prototype._createInitCallback = function() {
-    var self = this;
-    return function() {
-    // Is this still the most current ElevationRayManager ?
-    if (!self._isUpToDate()) {
-        return;
-    }
-    self._elevationService = new google.maps.ElevationService();
-    // Fetch the elevations
-    for (var i = 0; i < self.NUM_RAYS; i++) {
-      // Again because of quota, we must differ the RPCs to the elevation service.
-      // We have a 10 ms interval between two RPCs
-      setTimeout(self._createSendRPCCallback(i), i*self._overlay.waitBetweenTwoRPCs);
-    }
-    };
+ElevationRayManager.prototype._finishInit = function() {
+	// Is this still the most current ElevationRayManager ?
+	if (!this._isUpToDate()) {
+		return;
+	}
+	if (this.isInitialized()) {
+		console.log("All elevations received: !");
+		// Init is done. Now we can plot
+		this._overlay.plotSunAndShade();
+	} else {
+		// We send the elevation services sequentially. This looks certainly
+		// weird, but this way we get way fewer OUT_OF_QUOTA responses.
+		var callback = this._pendingCallbacks.pop();
+		callback();
+	}
 };
 
 ElevationRayManager.prototype._createSendRPCCallback = function(index) {
     var self = this;
     return function() {
-        if (!self._isUpToDate()) {
-            return;  // We no longer need the result
-        }
         var heading = 360*index/self.NUM_RAYS;
         var destination = google.maps.geometry.spherical.computeOffset(self._position, self.SHADE_COMPUTATION_DISTANCE, heading);
         var straightPath = [ self._position, destination];
-        //console.log("Getting elevations for heading " + heading);
-        self._elevationService.getElevationAlongPath({path: straightPath, samples: self.SHADE_COMPUTATION_NUM_SAMPLES}, self._createProcessElevationResponseCallback(index));
+        self._elevationService.getElevationAlongPath(
+        		{
+        			path: straightPath,
+        			samples: self.SHADE_COMPUTATION_NUM_SAMPLES
+        		},
+        		((result, status) => { self._processElevationResponseCallback(index, result, status);}
+        		).bind(self));
     };
 };
             
-ElevationRayManager.prototype._createProcessElevationResponseCallback = function(index) {
-  var self = this;
-  return function(result, status){
-    // Is this still the most current ElevationRayManager ?
-    if (!self._isUpToDate()) {
-      return;
-    }
-    if (status != google.maps.ElevationStatus.OK) {
-      self._overlay.waitBetweenTwoRPCs = Math.ceil(1.5 * self._overlay.waitBetweenTwoRPCs );
-      console.log("Elevation status is " + status + ". Increased wait to " + self._overlay.waitBetweenTwoRPCs + "ms.");
-      setTimeout(self._createSendRPCCallback(index), self._overlay.waitBetweenTwoRPCs);
-      return;
-    }
-    // The RPC worked. Decrease the wait.
-    self._overlay.waitBetweenTwoRPCs = Math.ceil(0.8 * self._overlay.waitBetweenTwoRPCs );
-    if (result.length != self.SHADE_COMPUTATION_NUM_SAMPLES) {
-      console.log("Unexpected number of elevations points: expected " + self.SHADE_COMPUTATION_NUM_SAMPLES + ", received " + result.length);
-      return;
-    }
-    //console.log("Received elevations for heading " + (360*index/self.NUM_RAYS));
-    self._centerElevation = result[0].elevation;
-    self._elevations[index] = result.slice(1, self.SHADE_COMPUTATION_NUM_SAMPLES);
-    self._numPendingResults--;
-    if (self.isInitialized()) {
-        console.log("All elevations received: !");
-      // Init is done. Now we can plot
-      self._overlay.plotSunAndShade();
-    }
-  };
+ElevationRayManager.prototype._processElevationResponseCallback = function(index, result, status){
+	// Is this still the most current ElevationRayManager ?
+	if (!this._isUpToDate()) {
+		return;
+	}
+	if (status != google.maps.ElevationStatus.OK) {
+		this._overlay.waitAfterFailedRpc = Math.ceil(1.5 * this._overlay.waitAfterFailedRpc );
+		console.log("Elevation status is " + status + ". Increased wait to " + this._overlay.waitAfterFailedRpc + "ms.");
+		// Enqueue back RPC
+		this._pendingCallbacks.push(this._createSendRPCCallback(index));
+		//      setTimeout(this._createSendRPCCallback(index), this._overlay.waitAfterFailedRpc);
+		setTimeout(this._finishInit.bind(this), this._overlay.waitAfterFailedRpc);
+		return;
+	} 
+	// The RPC worked. Reset the wait.
+	this._overlay.waitAfterFailedRpc = 100;
+	if (result.length != this.SHADE_COMPUTATION_NUM_SAMPLES) {
+		console.log("Unexpected number of elevations points: expected " + this.SHADE_COMPUTATION_NUM_SAMPLES + ", received " + result.length);
+		return;
+	}
+	this._centerElevation = result[0].elevation;
+	this._elevations[index] = result.slice(1, this.SHADE_COMPUTATION_NUM_SAMPLES);
+	this._finishInit();
 };
 
 ElevationRayManager.prototype._maxAngle = function(index, height) {
@@ -106,25 +103,25 @@ ElevationRayManager.prototype._maxAngle = function(index, height) {
   var angles = this._elevations[index].map(function (r, i){return Math.atan( (r.elevation - (centerElevation + height)) / ((i+1) * distanceIncrement))});
   return Math.max.apply(null, angles);
 };
-        
+
 // Returns the angle of the landscape seen from the observer at the given azimuth. The azimuth is a
 // SunCalc's azimuth: south in 0, west is Pi/2.
 //
 // height is the observer height above ground, in meters.
 ElevationRayManager.prototype.getTopographicalAngle = function(azimuth, height) {
-  if (this._numPendingResults != 0) {
-            console.log("Illegal state: cannot compute angles while results are pending.");
-            return;
-  }
-  var heading = 180 + azimuth * 180 / Math.PI;
-  if (heading < 0) {
-    heading += 360;
-  }
-  if (heading >= 360) {
-    heading -= 360;
-  }
-  var increment = 360 / this.NUM_RAYS;
-  var lowerBoundIndex = Math.floor(heading / increment);
+	if (this._pendingCallbacks.length != 0) {
+		console.log("Illegal state: cannot compute angles while results are pending.");
+		return;
+	}
+	var heading = 180 + azimuth * 180 / Math.PI;
+	if (heading < 0) {
+		heading += 360;
+	}
+	if (heading >= 360) {
+		heading -= 360;
+	}
+	var increment = 360 / this.NUM_RAYS;
+	var lowerBoundIndex = Math.floor(heading / increment);
   var excess = heading - lowerBoundIndex * increment;
   var interpolationFraction = excess / increment;
   var upperBoundIndex = (lowerBoundIndex + 1) % this.NUM_RAYS;
@@ -186,7 +183,10 @@ $.extend(SuncalcOverlay.prototype, {
 	},
 	
 	onAdd: function() {
-        this.waitBetweenTwoRPCs = 10, // Default wait of 10 ms between consecutive RPCs to the elevation service
+		// Default wait of 100 ms after a failed RPC to the elevation service
+        this.waitAfterFailedRpc = 100;
+        this.lastRpcFailed = false;
+        
 		this._centerX = this._centerY = this.RADIUS + this.PADDING;
 		this._width = this._centerX * 2;
 		this._height = this._centerY * 2;
