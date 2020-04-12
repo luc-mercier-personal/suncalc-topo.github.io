@@ -11,15 +11,18 @@ html, body {
 	height: 100%;
 	overflow: hidden;
 	}
+body {
+	display: flex;
+	flex-direction: column;
+}
 #map {
-	position: absolute;
-	top: 100px;
-	bottom: 22px;
+	display: block;
 	left: 0;
 	right: 0;
 	overflow: hidden;
 	border-top: 1px solid #ccc;
 	border-bottom: 1px solid #ccc;
+	flex-grow: 1;
 	}
 #footer {
 	position: absolute;
@@ -27,9 +30,11 @@ html, body {
 	left: 0;
 	height: 25px;
 	line-height: 25px;
-	padding-left: 20px;
+	padding-left: 10px;
+	padding-right: 10px;
 	font-size: 1.1em;
 	color: #777;
+	background-color: #fff;
 	}
 #footer a, .ui-widget-content a, a {
 	color: #0083CB;
@@ -47,9 +52,7 @@ html, body {
 	margin: 1em 0;
 	}
 #header {
-	height: 70px;
 	width: 100%;
-	position: absolute;
 	}
 #header h1 {
 	font: bold 3.2em Georgia, serif;
@@ -63,15 +66,16 @@ html, body {
 	color: black;
 	padding-top: 47px;
 	height: 0;
-	width: 143px;
 	overflow: hidden;
 	display: block;
-	background: url(../images/logo.png) no-repeat;
 	}
 #settings {
 	font-size: 1.4em;
 	margin: 6px 0 0 0;
 	white-space: nowrap;
+	display: flex;
+	flex-wrap: wrap;
+	flex-direction: row;
 	}
 #date-container, #time-container, #location-container {
 	float: left;
@@ -86,6 +90,10 @@ input[type=text], input.text {
 	padding: 4px;
 	font-size: 1.4em;
 	}
+#height {
+	width: 3em;
+	text-align: right;
+}
 input[type=text]:focus, input.text:focus, input[type=text]:hover, input.text:hover {
 	border-color: #666;
 	}
@@ -227,9 +235,8 @@ acronym {
 }
 
 #time-slider-container {
-	position: absolute;
-	top: 60px;
 	width: 100%;
+	padding-bottom: 5px;
 }
 #time-slider-2 {
 	margin: 0px 15px 0;
